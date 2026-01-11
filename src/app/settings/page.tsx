@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore, useBotStore } from '@/lib/store';
-import { settingsAPI } from '@/lib/api';
-import { ArrowLeft, Key, Shield, Bell, Save, Loader2, BrainCircuit, Clock, Coins, Zap, AlertTriangle } from 'lucide-react';
+import { settingsAPI, marketAPI } from '@/lib/api';
+import { ArrowLeft, Key, Shield, Bell, Save, Loader2, BrainCircuit, Clock, Coins, Zap, AlertTriangle, Search, X, Plus } from 'lucide-react';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -32,6 +32,11 @@ export default function SettingsPage() {
   const [apiKeysStatus, setApiKeysStatus] = useState({ indodaxConfigured: false, geminiConfigured: false });
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  
+  // Pair search state
+  const [pairSearch, setPairSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     // Wait for hydration before checking auth
@@ -104,6 +109,39 @@ export default function SettingsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Search pairs handler
+  const handlePairSearch = async (keyword: string) => {
+    setPairSearch(keyword);
+    if (keyword.length < 3) {
+      setSearchResults([]);
+      return;
+    }
+    setSearching(true);
+    try {
+      const result = await marketAPI.searchPairs(keyword);
+      setSearchResults(result.pairs || []);
+    } catch (error) {
+      console.error('Failed to search pairs:', error);
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const addPairToList = (pairId: string) => {
+    const current = settings.allowedPairs || [];
+    if (!current.includes(pairId)) {
+      setSettings({ ...settings, allowedPairs: [...current, pairId] });
+    }
+    setPairSearch('');
+    setSearchResults([]);
+  };
+
+  const removePairFromList = (pairId: string) => {
+    const current = settings.allowedPairs || [];
+    setSettings({ ...settings, allowedPairs: current.filter(p => p !== pairId) });
   };
 
   if (!_hasHydrated) {
@@ -341,61 +379,117 @@ export default function SettingsPage() {
               <label className="block text-sm text-slate-400 mb-2">
                 Pairs to Analyze
               </label>
-              <p className="text-xs text-slate-500 mb-3">Select which trading pairs the bot should analyze. Fewer pairs = faster & cheaper analysis.</p>
+              <p className="text-xs text-slate-500 mb-3">Search and add trading pairs for the bot to analyze.</p>
               
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {[
-                  { id: 'btc_idr', name: 'BTC/IDR', popular: true },
-                  { id: 'eth_idr', name: 'ETH/IDR', popular: true },
-                  { id: 'sol_idr', name: 'SOL/IDR', popular: true },
-                  { id: 'xrp_idr', name: 'XRP/IDR', popular: true },
-                  { id: 'doge_idr', name: 'DOGE/IDR', popular: true },
-                  { id: 'shib_idr', name: 'SHIB/IDR', hot: true },
-                  { id: 'pepe_idr', name: 'PEPE/IDR', hot: true },
-                  { id: 'floki_idr', name: 'FLOKI/IDR', hot: true },
-                  { id: 'bonk_idr', name: 'BONK/IDR', hot: true },
-                  { id: 'wif_idr', name: 'WIF/IDR', hot: true },
-                  { id: 'trump_idr', name: 'TRUMP/IDR', hot: true },
-                  { id: 'pippin_idr', name: 'PIPPIN/IDR', hot: true },
-                  { id: 'ada_idr', name: 'ADA/IDR' },
-                  { id: 'bnb_idr', name: 'BNB/IDR' },
-                  { id: 'avax_idr', name: 'AVAX/IDR' },
-                  { id: 'dot_idr', name: 'DOT/IDR' },
-                  { id: 'matic_idr', name: 'MATIC/IDR' },
-                  { id: 'link_idr', name: 'LINK/IDR' },
-                  { id: 'ltc_idr', name: 'LTC/IDR' },
-                ].map((pair) => (
-                  <label
-                    key={pair.id}
-                    className={`flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all ${
-                      settings.allowedPairs?.includes(pair.id)
-                        ? 'bg-purple-600/20 border-purple-500/50 text-purple-300'
-                        : 'bg-slate-700/30 border-slate-600/50 text-slate-400 hover:border-slate-500'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={settings.allowedPairs?.includes(pair.id) || false}
-                      onChange={(e) => {
-                        const current = settings.allowedPairs || [];
-                        if (e.target.checked) {
-                          setSettings({ ...settings, allowedPairs: [...current, pair.id] });
-                        } else {
-                          setSettings({ ...settings, allowedPairs: current.filter(p => p !== pair.id) });
-                        }
-                      }}
-                      className="w-4 h-4 rounded bg-slate-700 border-slate-600"
-                    />
-                    <span className="text-sm font-medium">{pair.name}</span>
-                    {pair.popular && <span className="text-xs text-yellow-400">★</span>}
-                    {pair.hot && <span className="text-xs">🔥</span>}
-                  </label>
-                ))}
+              {/* Search Input */}
+              <div className="relative mb-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={pairSearch}
+                    onChange={(e) => handlePairSearch(e.target.value)}
+                    placeholder="Search pairs (min 3 chars)... e.g. sol, doge, pepe"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:border-cyan-500 focus:outline-none"
+                  />
+                  {searching && (
+                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-cyan-400 animate-spin" />
+                  )}
+                </div>
+                
+                {/* Search Results Dropdown */}
+                {searchResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                    {searchResults.map((pair: any) => (
+                      <button
+                        key={pair.id}
+                        onClick={() => addPairToList(pair.id)}
+                        disabled={settings.allowedPairs?.includes(pair.id)}
+                        className={`w-full px-4 py-3 flex items-center justify-between hover:bg-slate-700 transition-colors ${
+                          settings.allowedPairs?.includes(pair.id) ? 'opacity-50 cursor-not-allowed bg-slate-700/50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-white">{pair.symbol}/IDR</span>
+                          <span className="text-xs text-slate-400">{pair.name}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {pair.price && (
+                            <span className="text-sm text-slate-300">
+                              Rp {pair.price.toLocaleString('id-ID')}
+                            </span>
+                          )}
+                          {settings.allowedPairs?.includes(pair.id) ? (
+                            <span className="text-xs text-green-400">Added</span>
+                          ) : (
+                            <Plus className="h-4 w-4 text-cyan-400" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               
-              <p className="text-xs text-slate-500 mt-2">
-                Selected: {settings.allowedPairs?.length || 0} pair(s)
-              </p>
+              {/* Selected Pairs */}
+              <div className="mb-4">
+                <p className="text-xs text-slate-400 mb-2">Selected pairs ({settings.allowedPairs?.length || 0}):</p>
+                <div className="flex flex-wrap gap-2">
+                  {settings.allowedPairs?.map((pairId: string) => (
+                    <span
+                      key={pairId}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 rounded-full text-sm"
+                    >
+                      {pairId.replace('_idr', '').toUpperCase()}/IDR
+                      <button
+                        onClick={() => removePairFromList(pairId)}
+                        className="hover:bg-cyan-500/30 rounded-full p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {(!settings.allowedPairs || settings.allowedPairs.length === 0) && (
+                    <span className="text-sm text-slate-500">No pairs selected. Search and add pairs above.</span>
+                  )}
+                </div>
+              </div>
+              
+              {/* Quick Add Popular Pairs */}
+              <div>
+                <p className="text-xs text-slate-400 mb-2">Quick add popular pairs:</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {[
+                    { id: 'btc_idr', name: 'BTC', popular: true },
+                    { id: 'eth_idr', name: 'ETH', popular: true },
+                    { id: 'sol_idr', name: 'SOL', popular: true },
+                    { id: 'xrp_idr', name: 'XRP', popular: true },
+                    { id: 'doge_idr', name: 'DOGE', hot: true },
+                    { id: 'shib_idr', name: 'SHIB', hot: true },
+                    { id: 'pepe_idr', name: 'PEPE', hot: true },
+                    { id: 'trump_idr', name: 'TRUMP', hot: true },
+                  ].map((pair) => (
+                    <button
+                      key={pair.id}
+                      onClick={() => {
+                        const current = settings.allowedPairs || [];
+                        if (current.includes(pair.id)) {
+                          removePairFromList(pair.id);
+                        } else {
+                          addPairToList(pair.id);
+                        }
+                      }}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                        settings.allowedPairs?.includes(pair.id)
+                          ? 'bg-cyan-600/20 border border-cyan-500/50 text-cyan-300'
+                          : 'bg-slate-700/30 border border-slate-600/50 text-slate-400 hover:border-slate-500'
+                      }`}
+                    >
+                      {pair.name} {pair.popular && '★'} {pair.hot && '🔥'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <button

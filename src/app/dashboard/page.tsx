@@ -43,7 +43,8 @@ export default function DashboardPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
   const [analysisError, setAnalysisError] = useState('');
-  const [selectedPair, setSelectedPair] = useState('xrp_idr');
+  const [selectedPair, setSelectedPair] = useState('btc_idr');
+  const [trackedPairs, setTrackedPairs] = useState<string[]>(['btc_idr', 'eth_idr']);
   
   // Approval modal state
   const [confirmModal, setConfirmModal] = useState(false);
@@ -139,6 +140,17 @@ export default function DashboardPage() {
       setStatus(botStatus.active, botStatus.tradingMode);
       setSignals(signalData.signals || []);
       setStats(statsData);
+      
+      // Load user settings for tracked pairs
+      try {
+        const settingsData = await settingsAPI.get();
+        const allowedPairs = settingsData.settings?.allowedPairs || ['btc_idr', 'eth_idr'];
+        setTrackedPairs(allowedPairs);
+        // Set selected pair to first tracked pair if current selection is not in list
+        if (!allowedPairs.includes(selectedPair)) {
+          setSelectedPair(allowedPairs[0] || 'btc_idr');
+        }
+      } catch {}
 
       // Try to get balance and positions (may fail if API keys not configured)
       try {
@@ -360,12 +372,11 @@ export default function DashboardPage() {
               onChange={(e) => setSelectedPair(e.target.value)}
               className="flex-1 px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-lg text-white"
             >
-              <option value="xrp_idr">XRP/IDR</option>
-              <option value="btc_idr">BTC/IDR</option>
-              <option value="eth_idr">ETH/IDR</option>
-              <option value="sol_idr">SOL/IDR</option>
-              <option value="doge_idr">DOGE/IDR</option>
-              <option value="ada_idr">ADA/IDR</option>
+              {trackedPairs.map((pair) => (
+                <option key={pair} value={pair}>
+                  {pair.replace('_idr', '/IDR').toUpperCase()}
+                </option>
+              ))}
             </select>
             
             <button

@@ -71,6 +71,12 @@ export const marketAPI = {
     });
     return data;
   },
+  searchPairs: async (keyword: string) => {
+    const { data } = await api.get('/api/market/pairs/search', {
+      params: { q: keyword },
+    });
+    return data;
+  },
 };
 
 // Settings API
